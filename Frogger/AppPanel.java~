@@ -1,0 +1,484 @@
+import javax.swing.JPanel;
+import java.awt.Graphics;
+import java.util.*;
+import java.awt.Rectangle;
+import java.awt.Color;
+import java.lang.Runnable; 
+import java.awt.event.*;
+import java.util.ArrayList;
+import javax.swing.Timer;
+public class AppPanel extends JPanel implements Runnable,KeyListener,ActionListener
+{
+  private static final int refreshRate=100;
+  private long lastRefresh;
+  private boolean gameSwitch;
+  private Thread gameLoop;
+  private ArrayList<LilyPad> lilyPads=new ArrayList<LilyPad>();
+  private ArrayList<Frog> frogs=new ArrayList<Frog>();
+  private Frog frog;
+  private ArrayList<Log> logs0=new ArrayList<Log>();
+  private ArrayList<Turtle> turtles=new ArrayList<Turtle>();
+  private ArrayList<Log> logs1=new ArrayList<Log>();
+  private ArrayList<Car> cars0=new ArrayList<Car>();
+  private ArrayList<Truck> trucks=new ArrayList<Truck>();
+  private ArrayList<Car> cars1=new ArrayList<Car>();
+  private ArrayList<WaterGap> logs0WaterGaps=new ArrayList<WaterGap>();
+  private ArrayList<WaterGap> turtlesWaterGaps=new ArrayList<WaterGap>();
+  private ArrayList<WaterGap> logs1WaterGaps=new ArrayList<WaterGap>();
+  private ArrayList<WaterGap> lilyPadsWaterGaps=new ArrayList<WaterGap>();
+  private final int logsSize=2;
+  private final int turtlesSize=3;
+  private final int carsSize=3;
+  private final int trucksSize=2;
+  private Street street;
+  private Water water;
+  private GameField gameField;
+  private Rectangle gameFieldBounds, waterBounds, streetBounds, frogBounds;
+  private Timer deathTimer, lilyPadPresenceTimer, lilyPadAbsenceTimer;
+  private int turtleDistance, logDistance, carDistance, truckDistance, turtleWidth, logWidth, lilyPadWidth, carWidth, truckWidth, objectHeight, lives;
+  public AppPanel()
+  {
+    carWidth=41;
+    logWidth=66;
+    truckWidth=54;
+    turtleWidth=34;
+    objectHeight=20;
+    lilyPadWidth=35;
+    lives=6;
+    water=new Water(0, 0, 330, 4*(objectHeight+1));
+    waterBounds=water.getBounds();
+    street=new Street(waterBounds.x, waterBounds.y+waterBounds.height, waterBounds.width, 3*(objectHeight+1));
+    streetBounds=street.getBounds();
+    gameField=new GameField(streetBounds.x, streetBounds.y+streetBounds.height, streetBounds.width, objectHeight+1);
+    gameFieldBounds=gameField.getBounds();
+    turtleDistance=(waterBounds.width-turtlesSize*turtleWidth)/(5-turtlesSize);
+    logDistance=(waterBounds.width-logsSize*logWidth)/(5-logsSize);
+    truckDistance=(waterBounds.width-trucksSize*truckWidth)/(5-trucksSize);
+    carDistance=(waterBounds.width-carsSize*carWidth)/(5-carsSize);
+    frogs.add(new Frog(gameFieldBounds));
+    frog=frogs.get(0);
+    frogBounds=frog.getBounds();
+    createAquatics();
+    createVehicles();
+    lilyPadsWaterGaps.add(new WaterGap(waterBounds.x-1, waterBounds.y, waterBounds.width));
+    lilyPadPresenceTimer=new Timer(10000, this);
+    lilyPadAbsenceTimer=new Timer(5000, this);
+    deathTimer=new Timer(500, this);
+    lilyPadPresenceTimer.addActionListener(this);
+    lilyPadAbsenceTimer.addActionListener(this);
+    deathTimer.addActionListener(this);
+    addKeyListener(this);
+    setFocusable(true);
+    lilyPadAbsenceTimer.start();
+    gameLoop=new Thread(this);
+    gameSwitch=true;
+    gameLoop.start();
+  }
+  public void run()
+  {
+    while(gameSwitch)
+    {
+      long currentTime=System.currentTimeMillis();
+      for(int i=0; i<logs0.size(); i++)
+      {
+        Log log=logs0.get(i);
+        log.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkAquaticFrogCollision(log);
+        }
+        checkLogOblivionCollision(log);
+      }
+      for(int i=0; i<logs0WaterGaps.size(); i++)
+      {
+        WaterGap waterGap=logs0WaterGaps.get(i);
+        waterGap.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkWaterGapFrogCollision(waterGap);
+        }
+        checkLogWaterGapOblivionCollision(waterGap);
+      }
+      for(int i=0; i<logs1.size(); i++)
+      {
+        Log log=logs1.get(i);
+        log.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkAquaticFrogCollision(log);
+        }
+        checkLogOblivionCollision(log);
+      }
+      for(int i=0; i<logs1WaterGaps.size(); i++)
+      {
+        WaterGap waterGap=logs1WaterGaps.get(i);
+        waterGap.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkWaterGapFrogCollision(waterGap);
+        }
+        checkLogWaterGapOblivionCollision(waterGap);
+      }
+      for(int i=0; i<turtles.size(); i++)
+      {
+        Turtle turtle=turtles.get(i);
+        Rectangle turtleBounds=turtle.getBounds();
+        turtle.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkAquaticFrogCollision(turtle);
+        }
+        checkTurtleOblivionCollision(turtle);
+      }
+      for(int i=0; i<turtlesWaterGaps.size(); i++)
+      {
+        WaterGap waterGap=turtlesWaterGaps.get(i);
+        waterGap.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkWaterGapFrogCollision(waterGap);
+        }
+        checkTurtleWaterGapOblivionCollision(waterGap);
+      }
+      for(int i=0; i<cars0.size(); i++)
+      {
+        Car car=cars0.get(i);
+        Rectangle carBounds=car.getBounds();
+        car.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkVehicleFrogCollision(car);
+        }
+        checkCarOblivionCollision(car);
+      }
+      for(int i=0; i<cars1.size(); i++)
+      {
+        Car car=cars1.get(i);
+        Rectangle carBounds=car.getBounds();
+        car.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkVehicleFrogCollision(car);
+        }
+        checkCarOblivionCollision(car);
+      }
+      for(int i=0; i<trucks.size(); i++)
+      {
+        Truck truck=trucks.get(i);
+        Rectangle truckBounds=truck.getBounds();
+        truck.animate(currentTime);
+        if(frogs.size()>0)
+        {
+          checkVehicleFrogCollision(truck);
+        }
+        checkTruckOblivionCollision(truck);
+      }
+      if(lilyPads.size()>0)
+      {
+        if(frogs.size()>0)
+        {
+          checkFrogLilyPadCollision();
+        }
+      }
+      if(frogs.size()>0)
+      {
+        frog.animate(currentTime);
+        checkFrogOblivionCollision();
+        street.containsFrog(frog);
+      }
+      for(int i=0; i<lilyPadsWaterGaps.size(); i++)
+      {
+        checkWaterGapFrogCollision(lilyPadsWaterGaps.get(i));
+      }
+      if((currentTime-lastRefresh)>refreshRate)    
+      {                                                 
+        repaint();                                    
+        lastRefresh=currentTime;                    
+      }
+      if(gameLoop.interrupted())
+      {
+        gameSwitch=false;
+      }
+    }
+  }
+  public void quitGameLoop()
+  {
+    gameLoop.interrupt();
+  }
+  public void paintComponent(Graphics g)
+  {
+    super.paintComponent(g);
+    draw(g);
+  }
+  private void draw(Graphics g)
+  {
+    g.setColor(water.getColor());
+    water.draw(g);
+    g.setColor(street.getColor());
+    street.draw(g);
+    g.setColor(gameField.getColor());
+    gameField.draw(g);
+    if(lilyPads.size()>0)
+    {
+      lilyPads.get(0).draw(g);
+    }
+    for(int i=0; i<logs0.size(); i++)
+    {
+      Log log=logs0.get(i);
+      log.draw(g);
+    }
+    for(int i=0; i<turtles.size(); i++)
+    {
+      Turtle turtle=turtles.get(i);
+      turtle.draw(g);
+    }
+    for(int i=0; i<logs1.size(); i++)
+    {
+      Log log=logs1.get(i);
+      log.draw(g);
+    }
+    if(frogs.size()>0)
+    {
+      frog.draw(g);
+    }
+    for(int i=0; i<cars0.size(); i++)
+    {
+      Car car=cars0.get(i);
+      car.draw(g);
+    }
+    for(int i=0; i<trucks.size(); i++)
+    {
+      Truck truck=trucks.get(i);
+      truck.draw(g);
+    }
+    for(int i=0; i<cars1.size(); i++)
+    {
+      Car car=cars1.get(i);
+      car.draw(g);
+    }
+  }
+  private void createAquatics()
+  {
+    for(int i=0; i<logsSize; i++)
+    {
+      logs0.add(new Log(waterBounds.x+i*logWidth+(i+1)*logDistance, waterBounds.y+objectHeight+1));
+      logs1.add(new Log(waterBounds.x+i*logWidth+(i+1)*logDistance, waterBounds.y+3*(objectHeight+1)));
+    }
+    for(int i=0; i<(5-logsSize); i++)
+    {
+      WaterGap waterGap0=new WaterGap(waterBounds.x+i*(logWidth+logDistance), waterBounds.y+objectHeight+1, logDistance);
+      waterGap0.setDirection(1, 0);
+      logs0WaterGaps.add(waterGap0);
+      WaterGap waterGap1=new WaterGap(waterBounds.x+i*(logWidth+logDistance), waterBounds.y+3*(objectHeight+1), logDistance);
+      waterGap1.setDirection(1, 0);
+      logs1WaterGaps.add(waterGap1);
+    }
+    for(int i=0; i<turtlesSize; i++)
+    {
+      turtles.add(new Turtle(waterBounds.x+waterBounds.width-(i+1)*turtleWidth-i*turtleDistance, waterBounds.y+2*(objectHeight+1)));
+    }
+    for(int i=0; i<(5-turtlesSize); i++)
+    {
+      WaterGap waterGap=new WaterGap(waterBounds.x+waterBounds.width-(i+1)*(turtleWidth+turtleDistance), waterBounds.y+2*(objectHeight+1), turtleDistance);
+      waterGap.setDirection(-1, 0);
+      turtlesWaterGaps.add(waterGap);
+    }
+  }
+  private void createVehicles()
+  {
+    for(int i=0; i<carsSize; i++)
+    {
+      cars0.add(new Car(streetBounds.x+streetBounds.width-(i+1)*carWidth-i*carDistance, streetBounds.y));
+      cars1.add(new Car(streetBounds.x+streetBounds.width-(i+1)*carWidth-i*carDistance, streetBounds.y+2*(objectHeight+1)));
+    }
+    for(int i=0; i<trucksSize; i++)
+    {
+      trucks.add(new Truck(streetBounds.x+(i+1)*truckDistance+i*truckWidth, streetBounds.y+(objectHeight+1)));
+    }
+  }
+  private void checkAquaticFrogCollision(Aquatic a)
+  {
+    if(water.containsFrog(frog))
+    {
+      frog.board(a, streetBounds);
+    }
+  }
+  private void checkWaterGapFrogCollision(WaterGap w)
+  {
+    if(w.containsFrog(frog))
+    {
+      deathTimer.start();
+    }
+  }
+  private void loseLife()
+  {
+    frogs.clear();
+    lives--;
+    if(lives>0)
+    {
+      frogs.add(new Frog(gameFieldBounds));
+      frog=frogs.get(0);
+    }
+    else if(lives==0)
+    {
+      gameSwitch=false;
+    }
+  }
+  public void actionPerformed(ActionEvent e)
+  {
+    Object source=e.getSource();
+    if(source==deathTimer)
+    {
+      deathTimer.stop();
+      loseLife();
+    }
+    else if(source==lilyPadAbsenceTimer)
+    {
+      lilyPadAbsenceTimer.stop();
+      createNewLilyPad();
+    }
+    else if(source==lilyPadPresenceTimer)
+    {
+      lilyPadPresenceTimer.stop();
+      lilyPads.clear();
+      if(lilyPadsWaterGaps.size()>1)
+      {
+        lilyPadsWaterGaps.remove(1);
+      }
+      lilyPadsWaterGaps.set(0, new WaterGap(waterBounds.x-1, waterBounds.y, waterBounds.width));
+      lilyPadAbsenceTimer.start();
+    }
+  }
+  private void checkLogOblivionCollision(Log l)
+  {
+    Rectangle lBounds=l.getBounds();
+    if(lBounds.x>(waterBounds.x+waterBounds.width))
+    {
+      l.setPosition(waterBounds.x, lBounds.y);
+    }
+  }
+  private void checkTurtleOblivionCollision(Turtle t)
+  {
+    Rectangle tBounds=t.getBounds();
+    if((tBounds.x+tBounds.width)<gameFieldBounds.x)
+    {
+      t.setPosition(waterBounds.x+waterBounds.width-tBounds.width, tBounds.y);
+    }
+  }
+  private void checkTruckOblivionCollision(Truck t)
+  {
+    Rectangle tBounds=t.getBounds();
+    if(tBounds.x>(streetBounds.x+streetBounds.width+truckDistance))
+    {
+      t.setPosition(streetBounds.x, tBounds.y);
+    }
+  }
+  private void checkCarOblivionCollision(Car c)
+  {
+    Rectangle cBounds=c.getBounds();
+    if((cBounds.x+cBounds.width+carDistance)<streetBounds.x)
+    {
+      c.setPosition(streetBounds.x+streetBounds.width-cBounds.width, cBounds.y);
+    }
+  }
+  private void checkLogWaterGapOblivionCollision(WaterGap w)
+  {
+    Rectangle wBounds=w.getBounds();
+    if(wBounds.x>(waterBounds.x+waterBounds.width))
+    {
+      w.setPosition(waterBounds.x, wBounds.y);
+    }
+  }
+  private void checkTurtleWaterGapOblivionCollision(WaterGap w)
+  {
+    Rectangle wBounds=w.getBounds();
+    if((wBounds.x+wBounds.width)<waterBounds.x)
+    {
+      w.setPosition(waterBounds.x+waterBounds.width-wBounds.width, wBounds.y);
+    }
+  }
+  private void checkVehicleFrogCollision(Vehicle v)
+  {
+    if(v.killFrog(frog))
+    {
+      deathTimer.start();
+    }
+  }
+  private void checkFrogOblivionCollision()
+  {
+    if(street.containsPartialFrog(frog)==true || water.containsPartialFrog(frog)==true)
+    {
+      deathTimer.start();
+    }
+  }
+  private void checkFrogLilyPadCollision()
+  {
+    if(lilyPads.get(0).boardFrog(frog))
+    {
+      gameSwitch=false;
+    }
+  }
+  private void createNewLilyPad()
+  {
+    int x=waterBounds.x+(int)(Math.random()*(waterBounds.width-lilyPadWidth));
+    lilyPads.add(new LilyPad(waterBounds, x));
+    Rectangle lilyPadBounds=lilyPads.get(0).getBounds();
+    lilyPadsWaterGaps.set(0, new WaterGap(waterBounds.x-1, waterBounds.y, lilyPadBounds.x-waterBounds.x));
+    lilyPadsWaterGaps.add(new WaterGap(lilyPadBounds.x+lilyPadBounds.width-1, waterBounds.y, waterBounds.x+waterBounds.width-lilyPadBounds.x-lilyPadBounds.width));
+    lilyPadPresenceTimer.start();
+  }
+  public void keyPressed(KeyEvent e)
+  {
+    if(frog.isAlive()==true)
+    {
+      if(frogBounds.x>=gameFieldBounds.x && (frogBounds.x+frogBounds.width)<=(gameFieldBounds.x+gameFieldBounds.width) && (frogBounds.y+frogBounds.height)<=(gameFieldBounds.y+gameFieldBounds.height))
+      {
+        frog.navigate(e.getKeyCode());
+      }
+      else if(frogBounds.y>gameFieldBounds.y)
+      {
+        if(frogBounds.x<gameFieldBounds.x)
+        {
+          frog.collideX(gameFieldBounds.x);
+        }
+        else if((frogBounds.x+frogBounds.width)>(gameFieldBounds.x+gameFieldBounds.width))
+        {
+          frog.collideX(gameFieldBounds.x+gameFieldBounds.width-frogBounds.width);
+        }
+        else if((frogBounds.y+frogBounds.height)>(gameFieldBounds.y+gameFieldBounds.height))
+        {
+          frog.collideY(gameFieldBounds.y+gameFieldBounds.height-frogBounds.height);
+        }
+      }
+    }
+  }
+  public void keyReleased(KeyEvent e)
+  {
+    if(frog.getBoarded()==false)
+    {
+      frog.halt();
+      if(frogBounds.y>gameFieldBounds.y)
+      {
+        if(frogBounds.x<gameFieldBounds.x)
+        {
+          frog.collideX(gameFieldBounds.x);
+        }
+        else if((frogBounds.x+frogBounds.width)>(gameFieldBounds.x+gameFieldBounds.width))
+        {
+          frog.collideX(gameFieldBounds.x+gameFieldBounds.width-frogBounds.width);
+        }
+        else if((frogBounds.y+frogBounds.height)>(gameFieldBounds.y+gameFieldBounds.height))
+        {
+          frog.collideY(gameFieldBounds.y+gameFieldBounds.height-frogBounds.height);
+        }
+      }
+    }
+    else if(frog.getBoarded())
+    {
+      frog.alignDirection();
+    }
+  }
+  public void keyTyped(KeyEvent e)
+  {
+  }
+}
